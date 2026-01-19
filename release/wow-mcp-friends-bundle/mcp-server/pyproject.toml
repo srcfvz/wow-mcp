@@ -1,0 +1,18 @@
+[project]
+name = "wow-mcp-server"
+version = "0.1.0"
+description = "WoW MCP Server - file-based bridge to a WoW addon via SavedVariables"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp[cli]==1.20.0",
+]
+
+[project.scripts]
+wow-mcp-server = "wow_mcp_server.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["wow_mcp_server"]

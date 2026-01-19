@@ -1,0 +1,5 @@
+services:
+  wow-mcp:
+    build:
+      context: ./mcp-server
+    image: wow-mcp:local

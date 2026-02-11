@@ -1,5 +1,5 @@
 # WowMCP Desktop App (Prototype)
-_Last updated (UTC): 2026-02-11 17:08:17Z._
+_Last updated (UTC): 2026-02-11 17:19:39Z._
 
 This is the Python-based GUI dashboard for the WoW-MCP bridge (provider + permissions + secure API key storage).
 
@@ -13,6 +13,7 @@ It runs a small local “bridge daemon” that watches your `SavedVariables/WowM
 - **Overlay Chat**: Always-on-top overlay you can toggle (Windows hotkey: `Ctrl+Shift+F8`).
 - **Windows Auto-Detection**: Detects WoW install path from registry and common install locations.
 - **Data Sources Tab**: Detects installed addons from `scan_root` and lets you enable/disable each source.
+- **MCP Mode Guardrail**: If MCP mode is enabled, the UI avoids starting bridge-daemon mode and shows guidance for external stdio clients.
 
 ## In-game chat UX (important limitation)
 WoW addons can’t do networking and SavedVariables flush to disk reliably only on `/reload` and logout. So the in-game chat panel is **reload-based**:

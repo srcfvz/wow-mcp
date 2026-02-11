@@ -988,6 +988,13 @@ class WowMcpApp:
     def start_server_action(self, icon=None, item=None):
         # 1. Save config first
         self.save_config()
+
+        if self.config.get("mcp_mode"):
+            self.log(
+                "MCP mode is intended for external clients that launch the process over stdio. "
+                "Disable 'Expose as MCP Server' to run the local bridge daemon from this UI."
+            )
+            return
         
         # 2. Generate backend config
         self.server_manager.generate_server_config(self.config)

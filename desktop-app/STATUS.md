@@ -1,5 +1,5 @@
 # WowMCP Desktop App Status
-_Last updated (UTC): 2026-02-11 17:08:17Z._
+_Last updated (UTC): 2026-02-11 17:19:39Z._
 
 ## Phase 1: Prototype (GUI & Core)
 - [x] Create directory structure.
@@ -17,6 +17,7 @@ _Last updated (UTC): 2026-02-11 17:08:17Z._
 - [x] Implement WoW Path auto-detection (registry + common-path fallback on Windows).
 - [x] Implement Data Sources tab (addon detection from `scan_root` + persisted checkboxes).
 - [x] Minor UI cleanups (tray status checks + safer early logging + deep-merge config defaults).
+- [x] Guardrail for MCP mode toggle (UI no longer launches bridge daemon when MCP mode is enabled).
 
 ## Phase 2: Integration
 - [x] Connect GUI start button to actual `mcp-server` python script, passing the config.

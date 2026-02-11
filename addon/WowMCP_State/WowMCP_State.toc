@@ -2,7 +2,7 @@
 ## Title: WowMCP State
 ## Notes: Exports character state to SavedVariables for the external MCP bridge.
 ## Author: wow-mcp
-## Version: 0.1.0
+## Version: 0.2.0
 ## OptionalDeps: WowMCP_Cmd, TomTom
 ## SavedVariables: WowMCP_State
 

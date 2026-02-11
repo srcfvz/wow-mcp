@@ -1,5 +1,5 @@
 # WowMCP Implementation Log
-_Last updated (UTC): 2026-02-11 17:18:12Z._
+_Last updated (UTC): 2026-02-11 17:21:38Z._
 
 ## Goal
 Deliver a production-ready WoW MCP flow for Windows users:
@@ -31,6 +31,8 @@ Deliver a production-ready WoW MCP flow for Windows users:
 - `desktop-app/backend_interface.py`
   - Included `data_sources` in generated server config.
   - Removed unused import.
+- `desktop-app/wow_mcp_installer.iss`
+  - Added Inno Setup definition for app install + bundled addon payload + optional addon install step.
 - `addon/WowMCP_State/WowMCP_State.lua`
   - Bumped release quality to `0.2.0`.
   - Added richer slash command UX and safer reload behavior.
@@ -47,9 +49,9 @@ Deliver a production-ready WoW MCP flow for Windows users:
 - `luac -p addon/WowMCP_State/WowMCP_State.lua`
 
 ## Known Remaining Work
-- Build Inno Setup installer (`.iss`) for one-click Windows installation.
 - Add end-to-end automated smoke test for reload-based chat roundtrip.
 - Expand TSM AppHelper decoding for encoded `data` shapes.
+- Validate installer behavior on clean Windows VMs and add optional code-signing.
 
 ## Generated Artifact
 - `artifacts/wowmcp-addon-0.2.0.zip`

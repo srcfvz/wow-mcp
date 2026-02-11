@@ -1,5 +1,5 @@
 # WoW MCP Roadmap
-_Last updated (UTC): 2026-02-11 17:17:07Z._
+_Last updated (UTC): 2026-02-11 17:21:38Z._
 
 ## Phase 0 — Repo Skeleton (✅)
 - Canonical docs triad exists: `AGENTS.md`, `ROADMAP.md`, `STATUS.md`.
@@ -45,8 +45,8 @@ _Last updated (UTC): 2026-02-11 17:17:07Z._
   - WoW path auto-detect (Windows registry + common-path fallback)
   - `Data Sources` tab with addon detection and per-source toggles
   - secure API key storage + overlay chat + bridge process management
+  - Inno Setup installer script (`desktop-app/wow_mcp_installer.iss`) wired into `build_windows.bat`
 - Remaining packaging tasks:
-  - Inno Setup installer script
   - optional code-signing and installer QA matrix
 
 ## Non-negotiables (always)

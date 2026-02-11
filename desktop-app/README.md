@@ -1,5 +1,5 @@
 # WowMCP Desktop App (Prototype)
-_Last updated (UTC): 2026-02-11 17:19:39Z._
+_Last updated (UTC): 2026-02-11 17:20:53Z._
 
 This is the Python-based GUI dashboard for the WoW-MCP bridge (provider + permissions + secure API key storage).
 
@@ -40,3 +40,6 @@ The overlay gives you “real-time” chat without forcing `/reload` for every m
 ## Building for Windows
 
 Use the provided script (recommended): `build_windows.bat` (uses `wow_mcp.spec`).
+
+- Builds `dist/WowMCP.exe` with PyInstaller.
+- If Inno Setup Compiler (`ISCC`) is available, also builds `dist/WowMCP-Setup.exe` from `wow_mcp_installer.iss`.

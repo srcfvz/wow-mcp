@@ -1,5 +1,5 @@
 # WoW MCP Status
-_Last updated (UTC): 2026-02-11 17:18:12Z._
+_Last updated (UTC): 2026-02-11 17:21:38Z._
 
 ## Snapshot
 - Implemented: Dockerized MCP server (stdio) + desktop bridge mode with full MCP tool surface restored.
@@ -28,9 +28,9 @@ _Last updated (UTC): 2026-02-11 17:18:12Z._
   - `cd mcp-server && python3 -m unittest discover -s tests -p 'test_*.py' -v` (all passing)
 
 ## Next Actions
-1. Add Inno Setup script for one-click Windows installer (`.exe` installer + addon copy flow).
-2. Add end-to-end smoke test for chat bridge (`/wowmcp chat` → bridge → `CHAT_RESPONSE` replay in-game).
-3. Add a proper decoder for encoded `TradeSkillMaster_AppHelper.lua` payload variants.
+1. Add end-to-end smoke test for chat bridge (`/wowmcp chat` → bridge → `CHAT_RESPONSE` replay in-game).
+2. Add a proper decoder for encoded `TradeSkillMaster_AppHelper.lua` payload variants.
+3. Validate generated Inno installer on a clean Windows VM and add optional code-signing.
 4. (Optional) Add log-based signal ingestion for faster local telemetry without violating addon constraints.
 
 ## Handoff Log
@@ -40,3 +40,4 @@ _Last updated (UTC): 2026-02-11 17:18:12Z._
 - _2026-01-14 23:55Z:_ Added TSM craft parsing + liquidation/crafting suggestion tools; added optional TSM AppHelper pricing stub; `start.sh` now sources `.env`.
 - _2026-02-06 21:44Z:_ Added reload-based in-game chat panel + bridge support for `WowMCP_State.chat.outbox` → `CHAT_RESPONSE`.
 - _2026-02-11 17:17Z:_ Restored full MCP tool coverage in `server.py`, added source-toggle enforcement, fixed bridge replay persistence on error, completed desktop addon-source detection tab, and polished addon UX/safety (`v0.2.0`).
+- _2026-02-11 17:21Z:_ Added Inno Setup installer script (`desktop-app/wow_mcp_installer.iss`) and integrated optional installer build step into `desktop-app/build_windows.bat`.

@@ -1,5 +1,5 @@
 # WowMCP Desktop App Status
-_Last updated (UTC): 2026-02-11 17:19:39Z._
+_Last updated (UTC): 2026-02-11 17:20:53Z._
 
 ## Phase 1: Prototype (GUI & Core)
 - [x] Create directory structure.
@@ -27,4 +27,4 @@ _Last updated (UTC): 2026-02-11 17:19:39Z._
 ## Phase 3: Packaging
 - [x] Create PyInstaller spec file (`wow_mcp.spec`).
 - [x] Create Build Script (`build_windows.bat`).
-- [ ] Create Inno Setup script (Install Daemon + Copy Addon).
+- [x] Create Inno Setup script (`wow_mcp_installer.iss`) with optional addon install step.

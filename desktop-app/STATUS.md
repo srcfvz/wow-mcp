@@ -1,5 +1,5 @@
 # WowMCP Desktop App Status
-_Last updated (UTC): 2026-02-11 17:20:53Z._
+_Last updated (UTC): 2026-02-21 04:22:43Z._
 
 ## Phase 1: Prototype (GUI & Core)
 - [x] Create directory structure.
@@ -28,3 +28,7 @@ _Last updated (UTC): 2026-02-11 17:20:53Z._
 - [x] Create PyInstaller spec file (`wow_mcp.spec`).
 - [x] Create Build Script (`build_windows.bat`).
 - [x] Create Inno Setup script (`wow_mcp_installer.iss`) with optional addon install step.
+
+_Times in this log are expressed in UTC._
+## Handoff Log
+- _2026-02-21 04:22Z:_ Standardized `STATUS.md` with explicit UTC timezone note for log entries.

@@ -1,5 +1,5 @@
 # WoW MCP Status
-_Last updated (UTC): 2026-02-11 17:21:38Z._
+_Last updated (UTC): 2026-02-21 04:22:43Z._
 
 ## Snapshot
 - Implemented: Dockerized MCP server (stdio) + desktop bridge mode with full MCP tool surface restored.
@@ -33,6 +33,7 @@ _Last updated (UTC): 2026-02-11 17:21:38Z._
 3. Validate generated Inno installer on a clean Windows VM and add optional code-signing.
 4. (Optional) Add log-based signal ingestion for faster local telemetry without violating addon constraints.
 
+_Times in this log are expressed in UTC._
 ## Handoff Log
 - _2026-01-14 15:56Z:_ Created `ROADMAP.md` + `STATUS.md` and aligned scope with workspace rules.
 - _2026-01-14 22:24Z:_ Added MCP server + Docker entrypoint + SavedVariables parser/tests; documented runbook in `AGENTS.md`.

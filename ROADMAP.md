@@ -1,5 +1,5 @@
 # WoW MCP Roadmap
-_Last updated (UTC): 2026-02-11 17:21:38Z._
+_Last updated (UTC): 2026-03-05 16:19:09Z._
 
 ## Phase 0 — Repo Skeleton (✅)
 - Canonical docs triad exists: `AGENTS.md`, `ROADMAP.md`, `STATUS.md`.
@@ -48,6 +48,15 @@ _Last updated (UTC): 2026-02-11 17:21:38Z._
   - Inno Setup installer script (`desktop-app/wow_mcp_installer.iss`) wired into `build_windows.bat`
 - Remaining packaging tasks:
   - optional code-signing and installer QA matrix
+
+## Phase 6 — CurseForge Release Readiness (🚧)
+- Release is intentionally gated by pre-release testing.
+- Required before first upload:
+  - complete E2E chat bridge smoke test on live addon flow
+  - validate encoded `TradeSkillMaster_AppHelper.lua` payload decoding
+  - validate installer behavior on a clean Windows VM
+  - produce CurseForge-ready addon archive layout (`WowMCP_State/`, `WowMCP_Cmd/` at archive root)
+  - confirm TOC/flavor strategy against target WoW client variants
 
 ## Non-negotiables (always)
 - No protected automation, no botting, no injection/memory read.

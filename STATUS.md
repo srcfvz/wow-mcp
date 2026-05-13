@@ -1,54 +1,38 @@
-# WoW MCP Status
-_Last updated (UTC): 2026-03-05 16:19:09Z._
+# WowMCP Project Status
+_Last updated (UTC): 2026-03-30 08:30:00Z._
 
 ## Snapshot
-- Implemented: Dockerized MCP server (stdio) + desktop bridge mode with full MCP tool surface restored.
-- Local entrypoint: `start.sh` runs container with `--network none` (file-only bridge).
-- Parser/writer: `mcp-server/wow_mcp_server/savedvars.py` (Lua SavedVariables subset; supports tables/strings/numbers/bools/nil).
-- Tests: `python3 -m unittest discover -s tests -p 'test_*.py' -v` from `mcp-server/`.
-- Working today (no custom addon needed):
-  - Inventory snapshot via `Syndicator.lua` (`wow_inventory_get`, `wow_inventory_value`)
-  - Pricing via `Auctionator.lua` (`wow_price_get`, `wow_auctionator_realms_list`) + vendor buy cache
-  - Optional pricing via `TradeSkillMaster_AppHelper.lua` (`wow_price_get source=tsm`, `wow_tsm_scopes_list`) if TSM Desktop App is installed
-  - Liquidation guidance via `wow_liquidation_plan` (manual actions only)
-  - Crafting profitability suggestions via TSM craft cache (`wow_crafting_suggestions`, `wow_tsm_craft_scopes_list`)
-- Added: `WowMCP_State` in-game chat panel (`/wowmcp chat`) with reload-based request/response via `WowMCP_Cmd`.
-- Added: Desktop companion overlay chat (always-on-top) + Windows hotkey toggle (`Ctrl+Shift+F8`).
-- Added: desktop `Data Sources` tab with addon auto-detection and persisted per-source toggles.
-- Added: addon polish release `v0.2.0` (bounded outbox/history, richer slash commands, combat-safe reload guard, protected-command blocking).
-- Built addon release artifact: `artifacts/wowmcp-addon-0.2.0.zip`.
-- Release state: blocked on pre-release testing before any CurseForge publish.
+- Release status: TESTING (MVP)
+- Target: March 30-31, 2026
+- Architecture: **ChatLog Tailing + Clipboard JSON Protocol (WMCP1)**
+- Artifacts: Addon updated, Bridge refactored into Core logic.
 
-## QA / Bug Checks
-- Python compile checks:
-  - `python3 -m py_compile mcp-server/wow_mcp_server/server.py`
-  - `python3 -m py_compile desktop-app/main.py desktop-app/backend_interface.py`
-- Lua syntax check:
-  - `luac -p addon/WowMCP_State/WowMCP_State.lua`
-- Unit tests:
-  - `cd mcp-server && python3 -m unittest discover -s tests -p 'test_*.py' -v` (all passing)
+## 🚀 Recent Changes (Architecture Locked & Implemented)
+- [x] **Secure Protocol**: Switched to `WMCP1:` (Base64-encoded JSON) for clipboard injection.
+- [x] **Safe Execution**: Addon now enforces an allowlist (`NOTICE`, `WAYPOINT`, `CHAT_RESPONSE`).
+- [x] **TomTom Support**: Waypoints from LLM now trigger TomTom markers in-game.
+- [x] **Sender Verification**: Bridge now verifies character name before responding to triggers.
+- [x] **Bridge Refactoring**: Extracted shared logic into `bridge/core.py` (CLI & GUI share code).
+- [x] **Config Persistence**: Fixed settings loss by moving config to user-writable folders.
 
-## Pre-Release Test Gate (CurseForge)
-- [ ] End-to-end smoke test for reload-based chat roundtrip (`/wowmcp ask` -> bridge -> `CHAT_RESPONSE` in-game).
-- [ ] Validate TSM AppHelper decoder behavior on encoded payload variants.
-- [ ] Validate Inno installer on a clean Windows VM (install, launch, addon copy path, uninstall).
-- [ ] Build a CurseForge-ready addon zip with top-level folders (`WowMCP_State/`, `WowMCP_Cmd/`) instead of `addon/` prefix.
-- [ ] Confirm TOC/flavor packaging strategy for supported game clients and test with "Load out of date AddOns" off/on.
-- [ ] Publish only after all checks above are completed and logged.
+## 🛠️ Current Status
+**MVP Ready for In-Game Testing.**
+- Protocol hardened and scoped.
+- Trigger detection refined for safety.
+- GUI and CLI bridges are synchronized.
+
+## ⚠️ Important Notes for User
+- **Windows VM**: The bridge is Windows-ready.
+- **Dependencies**: Requires `pyperclip` (and `xclip`/`xsel` on Linux) to bridge to clipboard.
+- **WoW Setup**: User must enable `/chatlog` in WoW.
+- **Addon**: Updated `EditBox.lua` must be re-installed/re-copied to WoW AddOns folder.
 
 ## Next Actions
-1. Execute and document the full pre-release test gate in this file.
-2. Prepare a CurseForge upload candidate package only after tests pass.
-3. Add optional code-signing once installer validation is stable.
-4. (Optional) Add log-based signal ingestion for faster local telemetry without violating addon constraints.
+1. Run a clean smoke test with the `WMCP1` protocol in-game.
+2. Verify `WAYPOINT` logic with TomTom.
+3. Fix any remaining UI thread safety or path detection edge cases.
+4. Prepare final distribution bundle.
 
-_Times in this log are expressed in UTC._
 ## Handoff Log
-- _2026-01-14 15:56Z:_ Created `ROADMAP.md` + `STATUS.md` and aligned scope with workspace rules.
-- _2026-01-14 22:24Z:_ Added MCP server + Docker entrypoint + SavedVariables parser/tests; documented runbook in `AGENTS.md`.
-- _2026-01-14 23:29Z:_ Added read-only integrations for Syndicator inventory + Auctionator pricing and exposed MCP tools with a source toggle.
-- _2026-01-14 23:55Z:_ Added TSM craft parsing + liquidation/crafting suggestion tools; added optional TSM AppHelper pricing stub; `start.sh` now sources `.env`.
-- _2026-02-06 21:44Z:_ Added reload-based in-game chat panel + bridge support for `WowMCP_State.chat.outbox` → `CHAT_RESPONSE`.
-- _2026-02-11 17:17Z:_ Restored full MCP tool coverage in `server.py`, added source-toggle enforcement, fixed bridge replay persistence on error, completed desktop addon-source detection tab, and polished addon UX/safety (`v0.2.0`).
-- _2026-02-11 17:21Z:_ Added Inno Setup installer script (`desktop-app/wow_mcp_installer.iss`) and integrated optional installer build step into `desktop-app/build_windows.bat`.
-- _2026-03-05 16:19Z:_ Marked project as pre-release testing gate; blocked CurseForge publishing until E2E chat, TSM AppHelper decoding, installer VM QA, and CF packaging checks are completed.
+- 2026-03-28 22:04:55Z: Multi-agent review completed. Highest-risk blockers are dead `WowMCP_Cmd` plumbing, unsafe paste execution, unscoped log triggers, provider/runtime drift, and broken installers. Next agent should start from `../todo/wow-mcp.todo.md` and execute the remediation order there before touching polish or release copy.
+- 2026-03-28 22:27:29Z: Recorded the local Bottle/Battle.net WoW install root for future addon pushes and QA. Git for this project lives in `/home/src21/Chat/wow-mcp/.git`; there is still no `origin` remote configured, so GitHub publication remains pending the review checklist in `../todo/github-migration.todo.md`.

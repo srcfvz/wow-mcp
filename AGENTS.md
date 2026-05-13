@@ -1,139 +1,57 @@
-# AGENTS.md — WoW Addon + Bridge + MCP (Codex CLI)
-_Last updated (UTC): 2026-01-14 23:55:46Z._
+# WowMCP Agents & Architecture
+_Last updated (UTC): 2026-03-27 13:01:10Z._
 
-## Goal
-Build a **World of Warcraft “AI bridge”** that lets Codex CLI query in-game character state (quests, inventory, gold, etc.) and send **non-protected** UI commands back into the game.
+Cross-reference: `ROADMAP.md`, `STATUS.md`, `../todo/wow-mcp.todo.md`.
 
-Key rule: **WoW addons cannot do networking**. The MCP server runs outside the game. The addon is a sandboxed sensor/UI.
+## Workspace Todo Intake
+Before changing this repo from `/home/srcfvz/Chat`, read these in order:
+1. `../AGENTS.md`
+2. `../todo/AGENTS.md`
+3. `../todo/wow-mcp.todo.md`
+4. This file, then `STATUS.md`, then `ROADMAP.md`
 
-Deliverables:
-1) WoW Addon (Lua) that exports state + receives “soft commands”
-2) Local Bridge (external app) that reads addon outputs and writes commands
-3) MCP Server that exposes tools to Codex CLI
+Treat `../todo/wow-mcp.todo.md` as the operational backlog until the March 28-29, 2026 release window closes.
 
----
+## Snapshot
+- Target architecture: ChatLog tailing for low-latency request triggers plus SavedVariables for bulk snapshots such as inventory, prices, and crafts.
+- Current state: the repo is mid-pivot; legacy reload-based chat code and release docs still coexist with new bridge scaffolding.
+- Release priority: accurate, safe, Windows-first release quality suitable for a public CurseForge listing.
+- Safety rule: never implement or market protected-action automation.
 
-## Non-negotiable constraints
-- **No automation of protected actions** (casting, buying, posting auctions, accepting quests automatically, etc.). The addon may only **guide** and **prepare UI**, user still clicks.
-- **No memory reading / injection / botting**. Do not propose ban-risk methods.
-- Primary data transport should be **SavedVariables** (safe, file-based). Optionally read WoW logs for extra signals.
-- Must support running on Linux (user uses Nobara/Fedora-ish). Favor **Docker** where reasonable.
-- Reminder: SavedVariables are reliably flushed to disk on `/reload` and logout; don’t expect true real-time state without a log-based channel.
+## Data Flows
 
----
+### Data OUT (WoW -> MCP)
+1. **Real-time (Chat/Combat):** Handled via `WoWChatLog.txt` tailing. The WoW client writes logs to disk, and the Bridge (Python) tails them to provide instant context to the LLM.
+2. **Bulk Sync (Inventory/Prices):** Handled via `SavedVariables` (WowMCP_State, Syndicator, Auctionator, TSM). These are used for snapshotting complex state that isn't streamed in logs.
 
-## Architecture (high-level)
-### A) WoW Addon (Lua)
-Responsibilities:
-- Collect data snapshots (character, bags, quest log, money, profs if available).
-- Store snapshot into SavedVariables as a compact table.
-- Read commands (also from SavedVariables) and render them in-game:
-  - show “next quests”
-  - mark items to vendor/AH
-  - create clickable UI buttons for user actions
-  - optional: set waypoints using the map API (if available for the WoW version)
+### Data IN (MCP -> WoW)
+1. **Payload Generation:** The Bridge receives a command from the MCP Server (e.g., a TomTom waypoint or a chat reply).
+2. **Clipboard Injection:** The Bridge encodes the payload (Base64) and copies it to the OS Clipboard.
+3. **In-Game Input:** The user pastes the payload into a dedicated in-game EditBox (WowMCP_State). The addon decodes the payload and executes the Lua command.
 
-Data channels:
-- `SavedVariables`: `WowMCP_State` and `WowMCP_Cmd`
-- Event-driven updates: `PLAYER_LOGIN`, `BAG_UPDATE`, `QUEST_LOG_UPDATE`, `PLAYER_MONEY`, etc.
-- Throttle snapshot writes (avoid UI lag)
+## Core Components
 
-### B) Local Bridge (outside WoW)
-Responsibilities:
-- Read SavedVariables file(s)
-- Convert to clean JSON state for MCP server
-- Accept command JSON from MCP server and write to `WowMCP_Cmd` SavedVariables
-- Provide a “freshness” timestamp and ensure idempotency
+### 1. WoW Addon (addon/WowMCP_State)
+- `WowMCP_State.lua`: Manages the snapshotting of character data (Inventory, Quests, Stats).
+- `ChatLogExporter.lua`: Ensures specific events are printed to the chat log for the tailer to pick up.
+- `EditBox.lua`: A hidden/toggleable UI element that listens for pasted Base64 strings to execute commands.
 
-Transport:
-- File watcher preferred (inotify) but simple polling is OK.
+### 2. Bridge Daemon & GUI (bridge/)
+- `gui.py`: Tkinter-based user interface for API key management, provider selection (OpenAI, Anthropic, Gemini, Ollama), and bridge control.
+- `main.py`: Headless bridge logic. Detects WoW paths, monitors logs, and communicates with LLMs.
+- `config_manager.py`: Manages `config.json` for persistent user settings.
+- `tailer.py`: Watches `Logs/WoWChatLog.txt`. Parses events in real-time.
+- `clipboard_injector.py`: Interfaces with the OS clipboard to push payloads for the user to paste.
 
-### C) MCP Server
-Responsibilities:
-- Expose tools to Codex CLI
-- Maintain the latest parsed `wow_state`
-- Provide “advice” logic (quest ordering, vendor list, AH suggestions) using local heuristics + optional external pricing sources later
+### 3. Distribution Tools
+- `start-gui.bat`: One-click startup for Windows users (installs dependencies and runs the GUI).
+- `build-exe.bat`: Automated build script for creating a standalone `WowMcpBridge.exe` using PyInstaller.
 
----
+### 4. MCP Server (mcp-server/)
+- Standard MCP Server that exposes tools to the LLM.
+- Interfaces with the Bridge via stdio or HTTP (depending on deployment).
 
-## Repo layout (recommended)
-```
-wow-mcp/
-├── AGENTS.md
-├── ROADMAP.md
-├── STATUS.md
-├── docker-compose.yml
-├── start.sh                    # MCP entrypoint (docker, stdio)
-├── mcp-server/                 # Python MCP server (Docker build context)
-│   ├── Dockerfile
-│   ├── pyproject.toml
-│   ├── wow_mcp_server/
-│   └── tests/
-├── addon/                      # WoW addon (Lua) — TBD
-└── bridge/                     # Optional bridge daemon — TBD
-```
-
----
-
-## Dev / Runbook (current)
-
-### Prereqs
-- Docker + `docker compose`
-- Your WoW SavedVariables folder path on the host
-
-### Quickstart (stdio MCP server)
-1) Build the local image:
-   - `docker compose build wow-mcp`
-2) Point the server at your account SavedVariables directory:
-   - Recommended: create `wow-mcp/.env` (gitignored) with:
-     - `WOW_SAVEDVARS_DIR_HOST="/path/.../WTF/Account/<ACCOUNT>/SavedVariables"`
-     - `WOW_SCAN_ROOT_HOST="/path/.../World of Warcraft/_anniversary_"` (game root; enables `wow_addons_list`)
-   - Or export directly:
-     - `export WOW_SAVEDVARS_DIR_HOST='/path/.../WTF/Account/<ACCOUNT>/SavedVariables'`
-     - `export WOW_SCAN_ROOT_HOST='/path/.../World of Warcraft/_anniversary_'`
-3) Run the MCP server (stdio):
-   - `./start.sh`
-4) In Codex CLI, configure an MCP server command that executes `./start.sh` (the client spawns it and speaks stdio).
-
-### Environment variables (host-side)
-- `WOW_SAVEDVARS_DIR_HOST` (required): host path mounted to `/wow/SavedVariables` in the container.
-- `WOW_SCAN_ROOT_HOST` (optional): host path mounted read-only to `/wow/scan` for `wow_paths_probe` (defaults to `WOW_SAVEDVARS_DIR_HOST`).
-- Optional overrides:
-  - `WOW_STATE_FILE` (default `WowMCP_State.lua`)
-  - `WOW_STATE_VAR` (default `WowMCP_State`)
-  - `WOW_CMD_FILE` (default `WowMCP_Cmd.lua`)
-  - `WOW_CMD_VAR` (default `WowMCP_Cmd`)
-  - `WOW_PROBE_MAX_DEPTH` (default `9`)
-
-### Safety notes
-- `start.sh` runs the container with `--network none` (file-only bridge).
-- SavedVariables update cadence depends on WoW flushing (`/reload` / logout).
-
----
-
-## MCP Tools (current)
-- `wow_config_get`: returns resolved paths and variable names from env.
-- `wow_state_get`: parses the SavedVariables state table and returns `{status, meta, state}`.
-- `wow_cmd_write`: writes a “soft command” envelope into `WowMCP_Cmd.lua` (addon consumes on next load).
-- `wow_paths_probe`: scans `WOW_SCAN_ROOT` for candidate SavedVariables dirs containing the addon state file.
-- `wow_sources_detect`: detects which supported data sources exist in mounted SavedVariables (Syndicator/Auctionator/TSM/etc).
-- `wow_addons_list`: lists installed addons from `Interface/AddOns` under `WOW_SCAN_ROOT`.
-- `wow_characters_list`: lists characters known to Syndicator.
-- `wow_inventory_get`: returns aggregated inventory snapshot from Syndicator (bags + optional bank).
-- `wow_inventory_value`: values inventory items using `wow_price_get` and returns top-N by total value.
-- `wow_auctionator_realms_list`: lists Auctionator realm/faction keys in `AUCTIONATOR_PRICE_DATABASE`.
-- `wow_tsm_scopes_list`: lists scope keys inside `TradeSkillMaster_AppHelper.lua` (TSM Desktop App integration).
-- `wow_tsm_craft_scopes_list`: lists craft scopes inside `TradeSkillMaster.lua` (TSM scanned profession data).
-- `wow_tsm_crafts_list`: lists crafts from TSM scanned profession data.
-- `wow_price_get`: gets unit price (copper) from `tsm` / `auctionator` / `vendor` / `auto` (toggle).
-- `wow_liquidation_plan`: suggests what to sell on AH vs keep/vendor (manual actions only).
-- `wow_crafting_suggestions`: suggests profitable crafts from your inventory using TSM craft data + prices (manual actions only).
-
-### Notes on supported addons (Classic Anniversary)
-- Inventory: `Syndicator` (installed via Baganator) provides a cached bag/bank snapshot per character.
-- Pricing:
-  - Auctionator: decodes `AUCTIONATOR_PRICE_DATABASE` CBOR blob (no Desktop App needed).
-  - TSM AppHelper (optional): requires TSM Desktop App to write `TradeSkillMaster_AppHelper.lua` (enables `source=tsm`).
-- Crafting:
-  - TSM addon stores scanned craft recipes in `TradeSkillMaster.lua` and can be used for crafting suggestions without Desktop App.
-  - If crafts look stale/missing, open profession windows in-game (TSM refreshes its internal craft cache).
+## Working Rules
+- Prefer removing ambiguity over preserving abandoned flows.
+- Keep release docs, bundle docs, startup scripts, and the actual runtime architecture aligned.
+- Use `STATUS.md` for short session notes; keep the multi-phase execution plan in `../todo/wow-mcp.todo.md`.

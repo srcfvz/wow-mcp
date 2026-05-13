@@ -1,8 +1,0 @@
-## Interface: 20505, 11508
-## Title: WowMCP Cmd
-## Notes: Receives soft commands from the external MCP bridge via SavedVariables.
-## Author: wow-mcp
-## Version: 0.2.0
-## SavedVariables: WowMCP_Cmd
-
-WowMCP_Cmd.lua

@@ -3,19 +3,18 @@ _Last updated (UTC): 2026-02-11 17:21:38Z._
 
 ## Goal
 Deliver a production-ready WoW MCP flow for Windows users:
-- Desktop `.exe` companion UX
-- Addon-data source detection and toggles
-- Stable MCP server + bridge behavior
-- Safer, cleaner addon chat experience
+- Desktop GUI companion for easy setup and API key management.
+- One-click startup via `start-gui.bat`.
+- Zero-latency ChatLog tailing and clipboard injection.
+- Addon-data source detection and toggles.
 
 ## Process
-1. Ran parallel agent streams:
-- code audit + bug triage
-- desktop app implementation
-- addon polish
-2. Reviewed agent patches manually and integrated final server-side fixes.
-3. Executed compile checks + unit tests + Lua syntax validation.
-4. Updated roadmap/status docs and handoff notes.
+1.  **GUI Implementation**: Created `bridge/gui.py` using Tkinter for maximum Windows compatibility without heavy dependencies.
+2.  **Config Management**: Implemented `bridge/config_manager.py` to handle `config.json` for persistence.
+3.  **Data Sources UI**: Added dynamic addon scanning to the GUI using `config_utils.detect_addons_from_scan_root()`. The GUI now displays checkboxes for supported addons (Syndicator, Auctionator, TSM) and saves user preferences.
+4.  **Windows Integration**: Created `start-gui.bat` to automate dependency installation (`pyperclip`) and launch the GUI.
+5.  **UX Polish**: Added real-time log tailing and status indicators in the GUI.
+6.  **Documentation**: Created a new top-level `README.md` focusing on the GUI workflow for end-users.
 
 ## Main Changes
 - `mcp-server/wow_mcp_server/server.py`

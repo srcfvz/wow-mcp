@@ -1149,9 +1149,9 @@ def main() -> None:
         return
 
     # In stdio MCP mode we can optionally run bridge in background if config is present.
-    if SERVER_CONFIG:
-        _start_bridge_thread()
-        logger.info("Bridge thread started in background")
+    # if SERVER_CONFIG:
+    #     _start_bridge_thread()
+    #     logger.info("Bridge thread started in background")
 
     logger.info("Starting WoW MCP Server (stdio)")
     mcp.run(transport="stdio")

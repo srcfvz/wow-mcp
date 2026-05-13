@@ -1,8 +1,11 @@
 local addonName = ...
 
 local STATE_VERSION = 1
-local ADDON_VERSION = "0.1.0"
+local ADDON_VERSION = "0.2.0"
 local THROTTLE_SECONDS = 1.0
+local CHAT_HISTORY_MAX_LINES = 200
+local CHAT_OUTBOX_MAX_LINES = 50
+local CHAT_TEXT_MAX_CHARS = 500
 
 local function now_utc_iso_z()
   -- UTC timestamp, second precision
@@ -17,11 +20,82 @@ local function chat(msg)
   end
 end
 
+local chatPanel = nil
+local chatPanelMessages = nil
+local chatPanelInput = nil
+local chatPanelAutoReload = nil
+local show_notice = nil
+local chat_ui_refresh = nil
+local ensure_chat_ui = nil
+local queue_chat_message = nil
+
 local function safe_tostring(v)
   if v == nil then
     return nil
   end
   return tostring(v)
+end
+
+local function trim_tail(list, max_items)
+  if type(list) ~= "table" then
+    return {}
+  end
+  if type(max_items) ~= "number" or max_items < 1 then
+    return list
+  end
+
+  local count = #list
+  if count <= max_items then
+    return list
+  end
+
+  local start = count - max_items + 1
+  local out = {}
+  for i = start, count do
+    out[#out + 1] = list[i]
+  end
+  return out
+end
+
+local function clean_text(text)
+  local out = tostring(text or "")
+  out = out:gsub("[%z\1-\8\11\12\14-\31]", " ")
+  out = out:gsub("%s+", " ")
+  out = out:gsub("^%s+", ""):gsub("%s+$", "")
+  if #out > CHAT_TEXT_MAX_CHARS then
+    out = out:sub(1, CHAT_TEXT_MAX_CHARS)
+    out = out:gsub("%s+$", "")
+  end
+  return out
+end
+
+local function register_escape_frame(name)
+  if type(UISpecialFrames) ~= "table" or not name then
+    return
+  end
+  for _, existing in ipairs(UISpecialFrames) do
+    if existing == name then
+      return
+    end
+  end
+  UISpecialFrames[#UISpecialFrames + 1] = name
+end
+
+local function in_combat()
+  return type(InCombatLockdown) == "function" and InCombatLockdown() and true or false
+end
+
+local function request_reload(origin)
+  if in_combat() then
+    local where = origin and (" (" .. tostring(origin) .. ")") or ""
+    chat("Cannot reload in combat" .. where .. ". Request queued.")
+    if show_notice then
+      show_notice("Queued. Leave combat, then use /wowmcp reload.")
+    end
+    return false
+  end
+  ReloadUI()
+  return true
 end
 
 local function init_state()
@@ -31,6 +105,186 @@ local function init_state()
   WowMCP_State.version = STATE_VERSION
   WowMCP_State.addon = addonName
   WowMCP_State.addon_version = ADDON_VERSION
+end
+
+local function ensure_chat_state()
+  init_state()
+  if type(WowMCP_State.chat) ~= "table" then
+    WowMCP_State.chat = {}
+  end
+  if type(WowMCP_State.chat.history) ~= "table" then
+    WowMCP_State.chat.history = {}
+  end
+  if type(WowMCP_State.chat.outbox) ~= "table" then
+    WowMCP_State.chat.outbox = {}
+  end
+  if type(WowMCP_State.chat.seq) ~= "number" then
+    WowMCP_State.chat.seq = 0
+  end
+  if type(WowMCP_State.chat.auto_reload) ~= "boolean" then
+    WowMCP_State.chat.auto_reload = true
+  end
+end
+
+local function chat_history_add(role, text, seq)
+  ensure_chat_state()
+  WowMCP_State.chat.history[#WowMCP_State.chat.history + 1] = {
+    role = safe_tostring(role),
+    text = safe_tostring(clean_text(text)),
+    at = now_utc_iso_z(),
+    seq = tonumber(seq),
+  }
+
+  WowMCP_State.chat.history = trim_tail(WowMCP_State.chat.history, CHAT_HISTORY_MAX_LINES)
+end
+
+local function chat_outbox_add(text)
+  local cleaned = clean_text(text)
+  if cleaned == "" then
+    return nil
+  end
+
+  ensure_chat_state()
+  WowMCP_State.chat.seq = (tonumber(WowMCP_State.chat.seq) or 0) + 1
+  local seq = WowMCP_State.chat.seq
+  WowMCP_State.chat.outbox[#WowMCP_State.chat.outbox + 1] = {
+    seq = seq,
+    text = safe_tostring(cleaned),
+    at = now_utc_iso_z(),
+  }
+  WowMCP_State.chat.outbox = trim_tail(WowMCP_State.chat.outbox, CHAT_OUTBOX_MAX_LINES)
+  chat_history_add("user", cleaned, seq)
+  return seq
+end
+
+queue_chat_message = function(text, origin)
+  local seq = chat_outbox_add(text)
+  if not seq then
+    chat("Usage: /wowmcp ask <text>")
+    return false
+  end
+
+  ensure_chat_ui()
+  chatPanel:Show()
+  chat_ui_refresh()
+
+  if WowMCP_State.chat and WowMCP_State.chat.auto_reload then
+    request_reload(origin or "chat")
+  else
+    chat("Queued. Use /wowmcp reload to flush SavedVariables.")
+    show_notice("Queued. Use /wowmcp reload to flush.")
+  end
+  return true
+end
+
+chat_ui_refresh = function()
+  if not chatPanel or not chatPanelMessages then
+    return
+  end
+
+  ensure_chat_state()
+
+  chatPanelMessages:Clear()
+  for _, msg in ipairs(WowMCP_State.chat.history) do
+    local role = msg.role or "?"
+    local text = msg.text or ""
+    if role == "user" then
+      chatPanelMessages:AddMessage("|cFFAAAAFFYou|r: " .. tostring(text))
+    elseif role == "assistant" then
+      chatPanelMessages:AddMessage("|cFFFFFF66AI|r: " .. tostring(text))
+    else
+      chatPanelMessages:AddMessage("|cFFCCCCCC" .. tostring(role) .. "|r: " .. tostring(text))
+    end
+  end
+
+  if chatPanelAutoReload and WowMCP_State.chat and type(WowMCP_State.chat.auto_reload) == "boolean" then
+    if WowMCP_State.chat.auto_reload then
+      chatPanelAutoReload:SetChecked(true)
+    else
+      chatPanelAutoReload:SetChecked(false)
+    end
+  end
+
+  if chatPanelMessages and chatPanelMessages.ScrollToBottom then
+    chatPanelMessages:ScrollToBottom()
+  end
+end
+
+ensure_chat_ui = function()
+  if chatPanel then
+    return
+  end
+
+  ensure_chat_state()
+
+  chatPanel = CreateFrame("Frame", "WowMCP_ChatPanel", UIParent, "BasicFrameTemplateWithInset")
+  chatPanel:SetSize(480, 360)
+  chatPanel:SetPoint("CENTER")
+  chatPanel:SetMovable(true)
+  chatPanel:EnableMouse(true)
+  chatPanel:RegisterForDrag("LeftButton")
+  chatPanel:SetScript("OnDragStart", chatPanel.StartMoving)
+  chatPanel:SetScript("OnDragStop", chatPanel.StopMovingOrSizing)
+  chatPanel:Hide()
+  register_escape_frame("WowMCP_ChatPanel")
+
+  chatPanel.title = chatPanel:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  chatPanel.title:SetPoint("LEFT", chatPanel.TitleBg, "LEFT", 8, 0)
+  chatPanel.title:SetText("WowMCP Chat (reload-based)")
+
+  chatPanelMessages = CreateFrame("ScrollingMessageFrame", nil, chatPanel)
+  chatPanelMessages:SetPoint("TOPLEFT", 12, -32)
+  chatPanelMessages:SetPoint("BOTTOMRIGHT", -12, 70)
+  chatPanelMessages:SetFontObject(ChatFontNormal)
+  chatPanelMessages:SetJustifyH("LEFT")
+  chatPanelMessages:SetFading(false)
+  chatPanelMessages:SetMaxLines(250)
+  chatPanelMessages:EnableMouseWheel(true)
+  chatPanelMessages:SetScript("OnMouseWheel", function(self, delta)
+    if delta > 0 then
+      self:ScrollUp()
+    else
+      self:ScrollDown()
+    end
+  end)
+
+  chatPanelInput = CreateFrame("EditBox", nil, chatPanel, "InputBoxTemplate")
+  chatPanelInput:SetPoint("BOTTOMLEFT", 12, 36)
+  chatPanelInput:SetSize(320, 22)
+  chatPanelInput:SetAutoFocus(false)
+
+  local sendBtn = CreateFrame("Button", nil, chatPanel, "GameMenuButtonTemplate")
+  sendBtn:SetPoint("BOTTOMRIGHT", -12, 34)
+  sendBtn:SetSize(120, 24)
+  sendBtn:SetText("Send (Reload)")
+  sendBtn:SetScript("OnClick", function()
+    local text = chatPanelInput:GetText() or ""
+    chatPanelInput:SetText("")
+    queue_chat_message(text, "chat panel send")
+  end)
+
+  chatPanelInput:SetScript("OnEnterPressed", function()
+    sendBtn:Click()
+  end)
+
+  chatPanelAutoReload = CreateFrame("CheckButton", "WowMCP_ChatAutoReload", chatPanel, "UICheckButtonTemplate")
+  chatPanelAutoReload:SetPoint("BOTTOMLEFT", 12, 12)
+  do
+    local label = _G[chatPanelAutoReload:GetName() .. "Text"] or chatPanelAutoReload.text or chatPanelAutoReload.Text
+    if label and label.SetText then
+      label:SetText("Auto-reload on send")
+    end
+  end
+  chatPanelAutoReload:SetScript("OnClick", function(self)
+    ensure_chat_state()
+    WowMCP_State.chat.auto_reload = self:GetChecked() and true or false
+  end)
+
+  local hint = chatPanel:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  hint:SetPoint("BOTTOMLEFT", chatPanelAutoReload, "BOTTOMRIGHT", 12, 2)
+  hint:SetText("SavedVariables flush on /reload or logout.")
+
+  chat_ui_refresh()
 end
 
 local function get_character()
@@ -236,7 +490,7 @@ end
 
 local noticeFrame = nil
 
-local function show_notice(text)
+show_notice = function(text)
   if noticeFrame == nil then
     noticeFrame = CreateFrame("Frame", "WowMCP_NoticeFrame", UIParent)
     noticeFrame:SetSize(420, 120)
@@ -278,11 +532,25 @@ local function show_notice(text)
     noticeFrame.text = fs
 
     noticeFrame:Hide()
+    register_escape_frame("WowMCP_NoticeFrame")
   end
 
   noticeFrame.text:SetText(tostring(text or ""))
   noticeFrame:Show()
 end
+
+local BLOCKED_CMD_TYPES = {
+  ACCEPT_QUEST = true,
+  AUTO_BUY = true,
+  AUTO_SELL = true,
+  BUY = true,
+  CAST = true,
+  INTERACT = true,
+  POST_AUCTION = true,
+  TARGET = true,
+  TURN_IN = true,
+  USE_ITEM = true,
+}
 
 local function handle_waypoint(payload)
   if type(payload) ~= "table" then
@@ -314,10 +582,19 @@ local function handle_cmd()
   end
 
   local id = safe_tostring(WowMCP_Cmd.id)
-  local cmdType = safe_tostring(WowMCP_Cmd.type)
+  local cmdTypeRaw = safe_tostring(WowMCP_Cmd.type)
   local payload = WowMCP_Cmd.payload
 
-  if not id or not cmdType then
+  if id then
+    id = id:gsub("^%s+", ""):gsub("%s+$", "")
+  end
+
+  local cmdType = nil
+  if cmdTypeRaw then
+    cmdType = string.upper(cmdTypeRaw)
+  end
+
+  if not id or id == "" or not cmdType or cmdType == "" then
     return
   end
 
@@ -329,6 +606,16 @@ local function handle_cmd()
     WowMCP_State.last_cmd_id = id
     WowMCP_State.last_cmd_type = cmdType
     WowMCP_State.last_cmd_at = now_utc_iso_z()
+    WowMCP_State.last_cmd_status = "received"
+  end
+
+  if BLOCKED_CMD_TYPES[cmdType] then
+    chat(("Blocked command type %s: protected automation is not allowed."):format(cmdType))
+    show_notice(("Blocked %s command (safety policy)."):format(cmdType))
+    if WowMCP_State then
+      WowMCP_State.last_cmd_status = "blocked_protected"
+    end
+    return
   end
 
   if cmdType == "NOTICE" then
@@ -336,18 +623,64 @@ local function handle_cmd()
     if type(payload) == "table" then
       msg = payload.message or payload.text
     end
-    msg = msg or ("NOTICE (" .. id .. ")")
+    msg = clean_text(msg or ("NOTICE (" .. id .. ")"))
     chat(msg)
     show_notice(msg)
+    if WowMCP_State then
+      WowMCP_State.last_cmd_status = "processed_notice"
+    end
+    return
+  end
+
+  if cmdType == "CHAT_RESPONSE" then
+    local msg = nil
+    if type(payload) == "table" then
+      msg = payload.text or payload.message
+    end
+    msg = clean_text(msg or "(empty response)")
+
+    ensure_chat_state()
+    chat_history_add("assistant", msg, tonumber(payload and payload.seq))
+    ensure_chat_ui()
+    chatPanel:Show()
+    chat_ui_refresh()
+    show_notice("AI reply received. Open /wowmcp chat")
+    if WowMCP_State then
+      WowMCP_State.last_cmd_status = "processed_chat_response"
+    end
+    return
+  end
+
+  if cmdType == "CHAT_ERROR" then
+    local msg = nil
+    if type(payload) == "table" then
+      msg = payload.error or payload.message or payload.text
+    end
+    msg = clean_text(msg or "(unknown error)")
+    ensure_chat_state()
+    chat_history_add("system", "ERROR: " .. tostring(msg), nil)
+    ensure_chat_ui()
+    chatPanel:Show()
+    chat_ui_refresh()
+    show_notice("AI error. Open /wowmcp chat")
+    if WowMCP_State then
+      WowMCP_State.last_cmd_status = "processed_chat_error"
+    end
     return
   end
 
   if cmdType == "WAYPOINT" then
     handle_waypoint(payload)
+    if WowMCP_State then
+      WowMCP_State.last_cmd_status = "processed_waypoint"
+    end
     return
   end
 
-  chat(("CMD %s (%s) received."):format(cmdType, id))
+  chat(("Ignoring unsupported cmd %s (%s). Use NOTICE/CHAT_RESPONSE/CHAT_ERROR/WAYPOINT."):format(cmdType, id))
+  if WowMCP_State then
+    WowMCP_State.last_cmd_status = "ignored_unsupported"
+  end
 end
 
 local pending = false
@@ -355,14 +688,18 @@ local pending_reason = {}
 
 local function write_snapshot()
   init_state()
+  ensure_chat_state()
   WowMCP_State.generated_at = now_utc_iso_z()
+  WowMCP_State.generated_unix = tonumber(time and time() or 0)
   WowMCP_State.character = get_character()
   WowMCP_State.money = GetMoney and GetMoney() or 0
   WowMCP_State.location = get_location()
+  WowMCP_State.in_combat = in_combat()
   WowMCP_State.bags = get_bags_summary()
   WowMCP_State.quests = get_quests()
   WowMCP_State.talents = get_talents()
   WowMCP_State.skills = get_skills()
+  WowMCP_State.chat_outbox_size = #WowMCP_State.chat.outbox
 
   local reasons = {}
   for k in pairs(pending_reason) do
@@ -402,6 +739,9 @@ frame:RegisterEvent("PLAYER_MONEY")
 frame:RegisterEvent("BAG_UPDATE_DELAYED")
 frame:RegisterEvent("QUEST_LOG_UPDATE")
 frame:RegisterEvent("SKILL_LINES_CHANGED")
+frame:RegisterEvent("ZONE_CHANGED")
+frame:RegisterEvent("ZONE_CHANGED_INDOORS")
+frame:RegisterEvent("ZONE_CHANGED_NEW_AREA")
 frame:RegisterEvent("PLAYER_LOGOUT")
 
 frame:SetScript("OnEvent", function(_, event)
@@ -414,8 +754,9 @@ frame:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_LOGIN" then
     init_state()
     handle_cmd()
+    ensure_chat_state()
     schedule_snapshot(event)
-    chat("loaded. Use /wowmcp for commands.")
+    chat(("loaded v%s. Use /wowmcp help for commands."):format(ADDON_VERSION))
     return
   end
 
@@ -426,36 +767,140 @@ frame:SetScript("OnEvent", function(_, event)
   schedule_snapshot(event)
 end)
 
+local function print_help()
+  ensure_chat_state()
+  local auto_reload = WowMCP_State.chat and WowMCP_State.chat.auto_reload and "ON" or "OFF"
+  chat("Commands:")
+  chat("  /wowmcp help - Show this help.")
+  chat("  /wowmcp chat [show|hide|toggle] - Open the in-game chat panel.")
+  chat("  /wowmcp ask <text> - Queue a chat prompt for bridge processing.")
+  chat("  /wowmcp autoreload <on|off> - Toggle auto /reload on send.")
+  chat("  /wowmcp status - Show snapshot + queue status.")
+  chat("  /wowmcp snapshot - Write a fresh state snapshot now.")
+  chat("  /wowmcp cmd - Show last processed command envelope.")
+  chat("  /wowmcp reload - Reload UI (blocked while in combat).")
+  chat(("Auto-reload is currently %s."):format(auto_reload))
+  chat("Safety: protected actions are never automated.")
+end
+
+local function set_auto_reload(enabled)
+  ensure_chat_state()
+  WowMCP_State.chat.auto_reload = enabled and true or false
+  if chatPanelAutoReload then
+    chatPanelAutoReload:SetChecked(WowMCP_State.chat.auto_reload)
+  end
+end
+
+local function show_status()
+  ensure_chat_state()
+
+  local generated_at = WowMCP_State.generated_at or "n/a"
+  local queue_size = #WowMCP_State.chat.outbox
+  local history_size = #WowMCP_State.chat.history
+  local auto_reload = WowMCP_State.chat.auto_reload and "ON" or "OFF"
+  chat(("Status: snapshot=%s, outbox=%d, history=%d, auto-reload=%s"):format(generated_at, queue_size, history_size, auto_reload))
+
+  if WowMCP_State.last_cmd_id then
+    local status = WowMCP_State.last_cmd_status or "unknown"
+    local at = WowMCP_State.last_cmd_at or "n/a"
+    chat(("Last cmd: %s (%s) at %s [%s]"):format(
+      tostring(WowMCP_State.last_cmd_type),
+      tostring(WowMCP_State.last_cmd_id),
+      tostring(at),
+      tostring(status)
+    ))
+  else
+    chat("Last cmd: none")
+  end
+end
+
 SLASH_WOWMCP1 = "/wowmcp"
 SlashCmdList["WOWMCP"] = function(msg)
-  msg = msg or ""
-  msg = msg:gsub("^%s+", ""):gsub("%s+$", "")
-  local lower = string.lower(msg)
+  msg = clean_text(msg or "")
 
-  if lower == "" or lower == "help" then
-    chat("Commands: /wowmcp snapshot | /wowmcp cmd | /wowmcp reload")
+  if msg == "" then
+    print_help()
     return
   end
 
-  if lower == "snapshot" then
+  local raw_command, raw_args = msg:match("^(%S+)%s*(.*)$")
+  local command = raw_command and string.lower(raw_command) or ""
+  local args = raw_args or ""
+
+  if command == "help" or command == "h" or command == "?" then
+    print_help()
+    return
+  end
+
+  if command == "chat" then
+    local action = string.lower(args)
+    if action ~= "" and action ~= "show" and action ~= "hide" and action ~= "toggle" then
+      chat("Usage: /wowmcp chat [show|hide|toggle]")
+      return
+    end
+
+    ensure_chat_ui()
+    if action == "show" then
+      chatPanel:Show()
+      chat_ui_refresh()
+      return
+    end
+
+    if action == "hide" then
+      chatPanel:Hide()
+      return
+    end
+
+    if chatPanel:IsShown() and action ~= "show" then
+      chatPanel:Hide()
+    else
+      chatPanel:Show()
+      chat_ui_refresh()
+    end
+    return
+  end
+
+  if command == "ask" then
+    queue_chat_message(args, "slash ask")
+    return
+  end
+
+  if command == "autoreload" then
+    local value = string.lower(args)
+    if value == "on" or value == "1" or value == "true" then
+      set_auto_reload(true)
+      chat("Auto-reload enabled.")
+      return
+    end
+    if value == "off" or value == "0" or value == "false" then
+      set_auto_reload(false)
+      chat("Auto-reload disabled.")
+      return
+    end
+    chat("Usage: /wowmcp autoreload <on|off>")
+    return
+  end
+
+  if command == "status" then
+    show_status()
+    return
+  end
+
+  if command == "snapshot" or command == "snap" then
     write_snapshot()
     chat("Snapshot updated (SavedVariables writes on logout or /reload).")
     return
   end
 
-  if lower == "cmd" then
-    if WowMCP_State and WowMCP_State.last_cmd_id then
-      chat(("Last cmd: %s (%s)"):format(tostring(WowMCP_State.last_cmd_type), tostring(WowMCP_State.last_cmd_id)))
-    else
-      chat("No cmd processed yet.")
-    end
+  if command == "cmd" or command == "lastcmd" then
+    show_status()
     return
   end
 
-  if lower == "reload" then
-    ReloadUI()
+  if command == "reload" then
+    request_reload("slash command")
     return
   end
 
-  chat("Unknown command. Use /wowmcp help")
+  chat(("Unknown command '%s'. Use /wowmcp help."):format(tostring(command)))
 end

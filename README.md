@@ -1,5 +1,5 @@
 # WowMCP - World of Warcraft Model Context Protocol
-
+Status: abandoned — I stopped playing. The MCP server worked: I used it from Codex CLI to query my inventory and Auctionator prices. It reads WoW's SavedVariables files, which the game only writes on /reload or logout, so data was only as fresh as the last /reload (I kept a macro for it). The in-game !ai flow below was started but never finished.
 WowMCP connects your World of Warcraft experience with AI (LLMs) to provide real-time assistance, inventory analysis, and more.
 
 ## 🚀 Quick Start (Windows Users)
@@ -23,7 +23,7 @@ If you want to create a standalone `.exe` for your friends or yourself (no Pytho
 2.  Wait for the process to finish.
 3.  Find your app in `dist/WowMcpBridge.exe`.
 
-## 🎮 How to Use
+## 🎮 In-game flow (unfinished — never worked end-to-end)
 
 *   **Ask AI:** Type `!ai <your question>` in any chat channel (Say, Party, Guild).
     *   *Example:* `!ai What are the best items in my bags?`
